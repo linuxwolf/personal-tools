@@ -1,0 +1,47 @@
+#! /usr/bin/env sh
+
+# *git up2date*
+# Ensures the local working copy is up-to-date with the remote, by:
+#   1. checking out the primary branch (`main` and/or `master`)
+#   2. pulling the latest changes for the primary branch
+#   3. trimming any local branches that are tracking 'pruned' remote branches
+#
+# This command fails if the local working copy is not clean
+#
+# ***NOTE*** Depends on the following:
+# * git (version 2.3+)
+# * git-trim (https://github.com/jasonmccreary/git-trim/blob/main/git-trim)
+
+set -euo pipefail
+
+function check_clean() {
+  local porcelain
+
+  porcelain=`git status --porcelain`
+  if [[ "$?" != "0" ]] ; then
+    exit 2
+  fi
+
+  if [[ "${porcelain}" != "" ]] ; then
+    echo "${porcelain}\n\nworking copy on clean; commit or stash changes first" > /dev/stderr
+    exit 1
+  fi
+}
+
+function checkout_primary() {
+  local primary_branch=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')  
+  local current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+  if [[ "${current_branch}" != "${primary_branch}" ]] ; then
+    git checkout "${primary_branch}"
+  fi
+}
+
+function update_workspace() {
+  git pull
+  git trim --pruned
+}
+
+check_clean
+checkout_primary
+update_workspace
