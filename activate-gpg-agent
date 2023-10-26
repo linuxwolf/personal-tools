@@ -1,0 +1,16 @@
+#! /usr/bin/env zsh
+
+# A 'sourcing' script to active GPG for SSH
+# To use this script, source it into your current shell:
+#   $ source /path/to/personal-tools/activate-gpg-agent
+#
+# PREREQUISITES:
+# - GPG (version 2.3+)
+# - SSH (version 6.2+)
+
+GPG_TTY="$(tty)"
+SSH_AUTH_SOCK=$(gpgconf --list-dirs agent-ssh-socket)
+export GPG_TTY SSH_AUTH_SOCK
+
+gpgconf --kill gpg-agent
+gpgconf --launch gpg-agent
