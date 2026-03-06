@@ -1,0 +1,88 @@
+#! /usr/bin/env zsh
+
+# Loads SSH keys into the running agent, listed in a predetermined file
+#
+# PREREQUISITES:
+# - SSH (version 8.2+)
+#
+# USAGE:
+#
+# Create a plain text file named "preload_keys" in your user's .ssh directory.
+# Each line is the SSH key file to load, relative to the "preload_keys" file. Any line that
+# does point to a file is ignored.
+#
+# To run this at login, copy this script to the "${HOME}/bin" directory (creating if needed),
+# then create a plist file named "net.outer-planes.ssh-keys.plisrt" in the
+# "${HOME}/Library/LaunchAgents" directory:
+#
+# <?xml version="1.0" encoding="UTF-8"?>
+# <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+# <plist version="1.0">
+#     <dict>
+#         <key>Label</key>
+#         <string>net.outer-planes.ssh-keys</string>
+#         <key>ProgramArguments</key>
+#         <array>
+#             <string>/Users/${USER}/bin/load-ssh-keys</string>
+#             <string>-W</string>
+#         </array>
+#         <key>KeepAlive</key>
+#         <true/>
+#     </dict>
+# </plist>
+#
+# Replace '${USER}' with your login user name.
+
+set -euo pipefail
+
+SSH_PRELOAD_KEYS_FILE="${SSH_PRELOAD_KEYS_FILE:-${HOME}/.ssh/preload_keys}"
+
+function load_keys() {
+  local preload_dir="$(dirname "${SSH_PRELOAD_KEYS_FILE}")"
+
+  echo "Loading keys from ${SSH_PRELOAD_KEYS_FILE} ..."
+
+  SSH_PRELOAD_KEYS=("${(f)"$(<${SSH_PRELOAD_KEYS_FILE})"}")
+
+  for key in "${SSH_PRELOAD_KEYS[@]}" ; do
+    local keyfile="${preload_dir}/${key}"
+    if [ -f "${keyfile}" ] ; then
+      ssh-add "${keyfile}"
+    fi
+  done
+
+  echo "... keys loaded from ${SSH_PRELOAD_KEYS_FILE}!"
+}
+
+function clear_keys() {
+  local preload_dir="$(dirname "${SSH_PRELOAD_KEYS_FILE}")"
+
+  echo "clearing added keys ..."
+
+  for key in "${SSH_PRELOAD_KEYS[@]}" ; do
+    local keyfile="${preload_dir}/${key}"
+    if [ -f "${keyfile}" ] ; then
+      ssh-add -d "${keyfile}"
+    fi
+  done
+
+  ssh-add -D
+}
+
+while getopts ":W" opt ; do
+  case $opt in
+    "W")
+      declare SSH_KEYS_ALIVE=1
+      ;;
+    esac
+done
+
+load_keys
+
+if [[ "${SSH_KEYS_ALIVE:-}" == "1" ]] ; then
+  echo "monitoring ${SSH_PRELOAD_KEYS_FILE} for changes ..."
+  fswatch -o "${SSH_PRELOAD_KEYS_FILE}" | while read event ; do
+    clear_keys
+    load_keys
+  done
+fi
