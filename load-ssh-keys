@@ -4,6 +4,7 @@
 #
 # PREREQUISITES:
 # - SSH (version 8.2+)
+# - fswatch (1.18+)
 #
 # USAGE:
 #
